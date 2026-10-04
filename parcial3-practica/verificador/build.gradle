@@ -1,0 +1,10 @@
+dependencies {
+    implementation project(':server')
+    implementation project(':pantalla')
+    implementation project(':postor')
+    implementation 'com.google.code.gson:gson:2.11.0'
+}
+
+application {
+    mainClass = 'verificador.Verificador'
+}
