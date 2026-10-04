@@ -1,107 +1,171 @@
-# :wave: The Basics of GitHub 
+# Parcial 2 (práctica v2): Subasta en línea sobre TCP y UDP
 
-## 🤓 Course overview and learning outcomes 
+**Computación en Internet I**
 
-The goal of this course is to give you a brief introduction to GitHub. We’ll also provide you with materials for further learning and a few ideas to get you started on our platform. 🚀
+| | |
+|---|---|
+| **Duración** | 2 horas (el parcial real está pensado para 1 h 15) |
+| **Modalidad** | Individual |
+| **Puertos** | TCP **9090** (postores) · UDP **5000** (pantallas) |
 
-## :octocat: Git and GitHub
+---
 
-Git is a **distributed Version Control System (VCS)**, which means it is a useful tool for easily tracking changes to your code, collaborating, and sharing. With Git you can track the changes you make to your project so you always have a record of what you’ve worked on and can easily revert back to an older version if need be. It also makes working with others easier—groups of people can work together on the same project and merge their changes into one final source!
+## 1. Contexto
 
-GitHub is a way to use the same power of Git all online with an easy-to-use interface. It’s used across the software world and beyond to collaborate and maintain the history of projects.
+Un sistema de subastas tiene 5 artículos. Hay dos tipos de cliente:
 
-GitHub is home to some of the most advanced technologies in the world. Whether you're visualizing data or building a new game, there's a whole community and set of tools on GitHub that can get you to the next step. This course starts with the basics of GitHub, but we'll dig into the rest later.
+- **Postores** (cliente `postor`): se conectan por **TCP** y mantienen la conexión abierta **durante toda su sesión**. Inician sesión con un nombre, ven los artículos y pujan. Los mensajes son **JSON**.
+- **Pantallas** (cliente `pantalla`): están en el salón de la subasta. Consultan por **UDP** el precio actual de un artículo o cuál es el más disputado. Como UDP no garantiza la entrega, la pantalla **reintenta** si no le llega respuesta.
 
-## :octocat: Understanding the GitHub flow 
+Un solo servidor atiende los dos canales a la vez sobre **el mismo estado**: una puja hecha por TCP se tiene que ver de inmediato en las pantallas por UDP.
 
-The GitHub flow is a lightweight workflow that allows you to experiment and collaborate on your projects easily, without the risk of losing your previous work.
+| Id | Artículo | Precio base |
+|---|---|---|
+| A1 | Portatil | 1000 |
+| A2 | Monitor 27 | 400 |
+| A3 | Teclado mecanico | 150 |
+| A4 | Audifonos | 120 |
+| A5 | Silla gamer | 600 |
 
-### Repositories
+### Reglas de la subasta
+- La **primera** puja de un artículo debe ser **≥ precio base**.
+- Las siguientes deben ser **≥ precio actual + 10**.
+- El líder actual **no puede** volver a pujar por el mismo artículo (`ALREADY_LEADER`).
+- El monto debe ser un número finito mayor que 0.
 
-A repository is where your project work happens--think of it as your project folder. It contains all of your project’s files and revision history.  You can work within a repository alone or invite others to collaborate with you on those files.
+---
 
-### Cloning 
+## 2. Estructura del proyecto
 
-When a repository is created with GitHub, it’s stored remotely in the ☁️. You can clone a repository to create a local copy on your computer and then use Git to sync the two. This makes it easier to fix issues, add or remove files, and push larger commits. You can also use the editing tool of your choice as opposed to the GitHub UI. Cloning a repository also pulls down all the repository data that GitHub has at that point in time, including all versions of every file and folder for the project! This can be helpful if you experiment with your project and then realize you liked a previous version more. 
-To learn more about cloning, read ["Cloning a Repository"](https://docs.github.com/en/github/creating-cloning-and-archiving-repositories/cloning-a-repository). 
+```text
+├── server/        Servidor (ENTREGADO: incompleto y con defectos)
+│   └── src/main/java/co/icesi/subasta/
+│       ├── Main.java
+│       ├── controllers/   TCPController, UDPController
+│       │   └── dtos/      Request, Response
+│       ├── model/         Item
+│       └── services/      ServicesImpl, AuctionException
+├── pantalla/      Cliente UDP (VACÍO: lo construye usted)
+├── postor/        Cliente TCP (VACÍO: lo construye usted)
+└── verificador/   Pruebas automáticas (NO modificar)
+```
 
-### Committing and pushing
-**Committing** and **pushing** are how you can add the changes you made on your local machine to the remote repository in GitHub. That way your instructor and/or teammates can see your latest work when you’re ready to share it. You can make a commit when you have made changes to your project that you want to “checkpoint.” You can also add a helpful **commit message** to remind yourself or your teammates what work you did (e.g. “Added a README with information about our project”).
+---
 
-Once you have a commit or multiple commits that you’re ready to add to your repository, you can use the push command to add those changes to your remote repository. Committing and pushing may feel new at first, but we promise you’ll get used to it 🙂
+## 3. Protocolo UDP (pantallas → servidor, puerto 5000)
 
-## 💻 GitHub terms to know 
+Los mensajes son texto con campos separados por `;`. Cada datagrama lleva una petición y el servidor responde con **un** datagrama al emisor. Los comandos van **en mayúsculas exactas**.
 
-### Repositories 
-We mentioned repositories already, they are where your project work happens, but let’s talk a bit more about the details of them! As you work more on GitHub you will have many repositories which may feel confusing at first. Fortunately, your ["GitHub dashboard"](https://docs.github.com/en/github/setting-up-and-managing-your-github-user-account/about-your-personal-dashboard) helps to easily navigate to your repositories and see useful information about them. Make sure you’re logged in to see it!
+| Petición | Respuesta |
+|---|---|
+| `PING` | `PONG` |
+| `PRICE;<id>` | `PRICE;<id>;<precioActual>;<lider>` (lider = `-` si no hay pujas). Ej: `PRICE;A1;1200.0;ana` |
+| `TOP` | `TOP;<id>;<numPujas>` del artículo con **más pujas**. En empate gana el que va primero en el catálogo. Si no hay pujas: `TOP;-;0` |
+| `PRICE;<id>` con un id que no existe | `ERROR;UNKNOWN_ITEM` |
+| Cualquier otra cosa (comando desconocido, vacío, campos de más o de menos) | `ERROR;INVALID_FORMAT` |
 
-Repositories also contain **README**s. You can add a README file to your repository to tell other people why your project is useful, what they can do with your project, and how they can use it. We are using this README to communicate how to learn Git and GitHub with you. 😄 
-To learn more about repositories read ["Creating, Cloning, and Archiving Repositories](https://docs.github.com/en/github/creating-cloning-and-archiving-repositories/about-repositories) and ["About README's"](https://docs.github.com/en/github/creating-cloning-and-archiving-repositories/about-readmes). 
+---
 
-### Branches
-You can use branches on GitHub to isolate work that you do not want merged into your final project just yet. Branches allow you to develop features, fix bugs, or safely experiment with new ideas in a contained area of your repository. Typically, you might create a new branch from the default branch of your repository—main. This makes a new working copy of your repository for you to experiment with. Once your new changes have been reviewed by a teammate, or you are satisfied with them, you can merge your changes into the default branch of your repository.
-To learn more about branching, read ["About Branches"](https://docs.github.com/en/github/collaborating-with-issues-and-pull-requests/about-branches).
+## 4. Protocolo TCP (postores → servidor, puerto 9090)
 
-### Forks
-A fork is another way to copy a repository, but is usually used when you want to contribute to someone else’s project. Forking a repository allows you to freely experiment with changes without affecting the original project and is very popular when contributing to open source software projects!
-To learn more about forking, read ["Fork a repo"](https://docs.github.com/en/github/getting-started-with-github/fork-a-repo)
+- Cada mensaje es **un objeto JSON en una línea terminada en `\n`**.
+- **Conexión persistente:** el postor abre **una** conexión y envía por ella todas sus peticiones, una tras otra. Por cada petición recibe exactamente una respuesta. La conexión se cierra cuando el postor envía `LOGOUT` (el servidor responde y cierra) o cuando el postor se desconecta.
+- El servidor **recuerda qué usuario inició sesión en cada conexión**.
 
-### Pull requests
-When working with branches, you can use a pull request to tell others about the changes you want to make and ask for their feedback. Once a pull request is opened, you can discuss and review the potential changes with collaborators and add more changes if need be. You can add specific people as reviewers of your pull request which shows you want their feedback on your changes! Once a pull request is ready-to-go, it can be merged into your main branch.
-To learn more about pull requests, read ["About Pull Requests"](https://docs.github.com/en/github/collaborating-with-issues-and-pull-requests/about-pull-requests). 
+**Petición:** `{"action":"BID","data":{"itemId":"A1","amount":"1200"}}` (todos los valores de `data` son strings)
 
+**Respuesta OK:** `{"status":"OK","data":{ ... }}`
+**Respuesta con error:** `{"status":"ERROR","data":{"message":"<CODIGO>"}}`
 
-### Issues
-Issues are a way to track enhancements, tasks, or bugs for your work on GitHub. Issues are a great way to keep track of all the tasks you want to work on for your project and let others know what you plan to work on. You can also use issues to tell a favorite open source project about a bug you found or a feature you think would be great to add!
+| `action` | `data` | Requiere login | `data` si OK | Códigos de error |
+|---|---|---|---|---|
+| `LOGIN` | `user` | no | `user` | `INVALID_DATA` (vacío o sin data) · `USER_IN_USE` (otro postor conectado ya usa ese nombre) · `ALREADY_LOGGED_IN` (esta conexión ya inició sesión) |
+| `LIST_ITEMS` | — | no | `items`: arreglo de artículos | — |
+| `BID` | `itemId`, `amount` | **sí** | `item`: el artículo actualizado | `NOT_LOGGED_IN` · `INVALID_DATA` (falta algún campo o el monto no es válido) · `UNKNOWN_ITEM` · `ALREADY_LEADER` · `BID_TOO_LOW` |
+| `MY_LEADS` | — | **sí** | `items`: artículos que el usuario va ganando | `NOT_LOGGED_IN` |
+| `LOGOUT` | — | no | — (después el servidor cierra la conexión) | — |
+| otra acción | | | | `UNKNOWN_ACTION` |
+| línea que no es JSON | | | | `INVALID_JSON` |
 
-For larger projects, you can keep track of many issues on a project board. GitHub Projects help you organize and prioritize your work and you can read more about them [in this "About Project boards document](https://docs.github.com/en/github/managing-your-work-on-github/about-project-boards). You likely won’t need a project board for your assignments, but once you move on to even bigger projects, they’re a great way to organize your team’s work!
-You can also link together pull requests and issues to show that a fix is in progress and to automatically close the issue when someone merges the pull request.
-To learn more about issues and linking them to your pull requests, read ["About Issues"](https://docs.github.com/en/github/managing-your-work-on-github/about-issues). 
+Un artículo en JSON se ve así (si `leader` es null, no aparece):
+```json
+{"id":"A1","name":"Portatil","basePrice":1000.0,"currentPrice":1200.0,"leader":"ana","bids":1}
+```
 
-### Your user profile
+---
 
-Your profile page tells people the story of your work through the repositories you're interested in, the contributions you've made, and the conversations you've had. You can also give the world a unique view into who you are with your profile README. You can use your profile to let future employers know all about you! 
-To learn more about your user profile and adding and updating your profile README, read ["Managing Your Profile README"](https://docs.github.com/en/github/setting-up-and-managing-your-github-profile/managing-your-profile-readme). 
+## 5. Requisitos del servidor
 
-### Using markdown on GitHub 
+1. `Main` deja funcionando **los dos** servidores al mismo tiempo, sobre la **misma** instancia de `ServicesImpl`.
+2. El TCP acepta conexiones en **todas las interfaces** de la máquina.
+3. El servidor debe atender **al menos 10 postores conectados al mismo tiempo**.
+4. **Un error en una petición nunca cierra la sesión ni la deja sin respuesta.** El servidor responde el código de error y sigue atendiendo esa conexión.
+5. Si un postor se desconecta (con o sin `LOGOUT`), su nombre de usuario **queda libre** para volver a usarse.
+6. El estado es compartido entre el hilo UDP y los hilos TCP. Aunque haya peticiones simultáneas:
+   - dos conexiones nunca pueden quedar con el mismo usuario;
+   - una puja rechazada nunca debe impedir que se sigan procesando las demás pujas.
 
-You might have noticed already, but you can add some fun styling to your issues, pull requests, and files. ["Markdown"](https://guides.github.com/features/mastering-markdown/) is an easy way to style your issues, pull requests, and files with some simple syntax. This can be helpful to organize your information and make it easier for others to read. You can also drop in gifs and images to help convey your point!
-To learn more about using GitHub’s flavor of markdown, read ["Basic Writing and Formatting Syntax"](https://docs.github.com/en/github/writing-on-github/basic-writing-and-formatting-syntax). 
+---
 
-### Engaging with the GitHub community
+## 6. Tareas
 
-The GitHub community is vast. There are many types of people who use GitHub in their day to day—students like you, professional developers, hobbyists working on open source projects, and explorers who are just jumping into the world of software development on their own. There are many ways you can interact with the larger GitHub community, but here are three places where you can start. 
+### Parte A: Servidor (≈ 55 min)
+El código de `server/` compila, pero **está incompleto y tiene varios defectos**. Encuéntrelos y corríjalos hasta que cumpla las secciones 3, 4 y 5. No cambie los nombres de clases, paquetes ni las firmas públicas existentes.
 
-#### Starring repositories 
+### Parte B: Cliente pantalla, UDP (≈ 15 min)
+En el módulo `pantalla/`, paquete `pantalla`:
+- `DisplayClient(String host, int port, int timeoutMs, int retries)`.
+- `String query(String message) throws IOException`: envía el datagrama y espera la respuesta. Si no llega en `timeoutMs`, **reenvía**, hasta `retries` envíos en total. Si ninguno recibe respuesta, lanza `SocketTimeoutException`.
+- `DisplayMain`: menú con precio de un artículo, artículo más disputado, PING y salir. Usa 1000 ms y 3 reintentos, muestra las respuestas de forma legible y, si se agotan los reintentos, muestra "Servidor no disponible".
 
-If you find a repository interesting or you want to keep track of it, star it! When you star a repository it’s also used as a signal to surface better recommendations on github.com/explore. If you’d like to get back to your starred repositories you can do so via your user profile. 
-To learn  more about starring repositories, read ["Saving Repositories with Stars"](https://docs.github.com/en/github/getting-started-with-github/saving-repositories-with-stars). 
+### Parte C: Cliente postor, TCP persistente (≈ 30 min)
+En el módulo `postor/`, paquete `postor`:
+- `Request` y `Response`, con la misma estructura de los DTO del servidor (campos públicos y constructor vacío).
+- `AuctionClient(String host, int port)` con:
+  - `void connect() throws IOException`: abre **la** conexión.
+  - `Response send(Request r) throws IOException`: envía por **esa misma** conexión y lee una respuesta. Si el servidor cerró la conexión, lanza `IOException`.
+  - `void close()`.
+- `PostorMain`: se conecta, pide el nombre hasta que el LOGIN sea exitoso, y luego muestra el menú:
+  1. Ver artículos (tabla con id, nombre, precio actual, líder y número de pujas).
+  2. Pujar.
+  3. Artículos que voy ganando.
+  4. Salir (envía LOGOUT).
 
-#### Following users 
+  Muestra los códigos de error que llegan del servidor y no se cae si se pierde la conexión.
 
-You can follow people on GitHub to receive notifications about their activity and discover projects in their communities. When you follow a user, their public GitHub activity will show up on your dashboard so you can see all the cool things they are working on. 
-To learn more about following users, read ["Following People"](https://docs.github.com/en/github/getting-started-with-github/following-people).
+### Parte D: Preguntas (≈ 10 min)
+1. El servidor entregado usaba un pool fijo de 5 hilos. En el Buscaminas ese pool alcanzaba para muchos jugadores, pero aquí no. ¿Por qué? ¿Qué le pasa exactamente al postor número 6?
+2. ¿Qué pasa con un `Semaphore` si se lanza una excepción entre `acquire()` y `release()`? ¿Por qué con `synchronized` no ocurre lo mismo?
+3. ¿Por qué el usuario de la sesión debe guardarse **fuera** del ciclo que lee las peticiones? Si la conexión fuera corta (una petición por conexión, como en el Buscaminas), ¿cómo sabría el servidor quién está pujando?
+4. Justifique por qué las pantallas usan UDP y los postores TCP.
 
-#### Browsing GitHub Explore 
+---
 
-GitHub Explore is a great place to do just that … explore :smile: You can find new projects, events, and developers to interact with.
+## 7. Cómo ejecutar y verificar
 
-You can check out the GitHub Explore website [at github.com/explore](https://github.com/explore). The more you interact with GitHub the more tailored your Explore view will be. 
+```bash
+./gradlew :verificador:run --console=plain   # pruebas automáticas (apague antes su servidor)
+./gradlew :server:run --console=plain        # terminal 1
+./gradlew :postor:run --console=plain        # terminales 2 y 3 (dos postores)
+./gradlew :pantalla:run --console=plain      # terminal 4
+```
+En Windows use `gradlew.bat` en lugar de `./gradlew`.
 
-## 📝 Optional next steps 
+Sin Gradle: `javac -cp gson.jar -d out $(find . -name "*.java")` y luego `java -cp out:gson.jar verificador.Verificador` (en Windows, `;` en lugar de `:`).
 
-* Open a pull request and let your teacher know that you’ve finished this course.  
-* Create a new markdown file in this repository. Let them know what you learned and what you are still confused about! Experiment with different styles!
-* Create your profile README. Let the world know a little bit more about you! What are you interested in learning? What are you working on? What's your favorite hobby? Learn more about creating your profile README in the document, ["Managing Your Profile README"](https://docs.github.com/en/github/setting-up-and-managing-your-github-profile/managing-your-profile-readme).
-* Go to your user dashboard and create a new repository. Experiment with the features within that repository to familiarize yourself with them. 
-* [Let us know what you liked or didn’t like about the content of this course](https://support.github.com/contact/education). What would you like to see more of? What would be interesting or helpful to your learning journey? 
+El verificador trae **70 pruebas**. Mientras haya partes sin hacer, algunas secciones se detienen antes y el total que muestra es menor.
 
-## 📚  Resources 
-* [A short video explaining what GitHub is](https://www.youtube.com/watch?v=w3jLJU7DT5E&feature=youtu.be) 
-* [Git and GitHub learning resources](https://docs.github.com/en/github/getting-started-with-github/git-and-github-learning-resources) 
-* [Understanding the GitHub flow](https://guides.github.com/introduction/flow/)
-* [How to use GitHub branches](https://www.youtube.com/watch?v=H5GJfcp3p4Q&feature=youtu.be)
-* [Interactive Git training materials](https://githubtraining.github.io/training-manual/#/01_getting_ready_for_class)
-* [GitHub's Learning Lab](https://lab.github.com/)
-* [Education community forum](https://education.github.community/)
-* [GitHub community forum](https://github.community/)
+---
+
+## 8. Rúbrica (0.0 a 5.0)
+
+| Componente | Peso | Evidencia |
+|---|---|---|
+| Lógica y servidor UDP | 0.7 | Secciones 1 y 3 |
+| Servicios y concurrencia | 0.8 | Sección 2 |
+| Servidor TCP: sesión persistente y robustez | 1.2 | Sección 4 |
+| Arranque conjunto | 0.3 | Sección 5 |
+| Cliente pantalla (UDP con reintentos) | 0.6 | Sección 6 + demo |
+| Cliente postor (TCP persistente) | 1.0 | Sección 7 + demo con dos postores a la vez |
+| Preguntas | 0.4 | Parte D |
+| **Total** | **5.0** | |
