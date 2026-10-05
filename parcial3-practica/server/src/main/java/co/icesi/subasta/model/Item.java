@@ -53,4 +53,16 @@ public class Item {
     public void setBids(int bids) {
         this.bids = bids;
     }
+
+    @Override
+    public String toString() {
+        return "Item{" +
+                "id='" + id + '\'' +
+                ", name='" + name + '\'' +
+                ", basePrice=" + basePrice +
+                ", currentPrice=" + currentPrice +
+                ", leader='" + leader + '\'' +
+                ", bids=" + bids +
+                '}';
+    }
 }

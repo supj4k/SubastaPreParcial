@@ -2,7 +2,7 @@ package co.icesi.subasta.controllers;
 
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
-
+import java.nio.charset.StandardCharsets;
 import co.icesi.subasta.model.Item;
 import co.icesi.subasta.services.ServicesImpl;
 
@@ -19,20 +19,20 @@ public class UDPController {
     }
 
     public void startService() {
-        try {
-            socket = new DatagramSocket(port);
+        try (DatagramSocket socket = new DatagramSocket(port);){
             running = true;
             System.out.println("UDP Service started on port " + port);
+            byte[] data = new byte[1024];
             while (running) {
-                byte[] data = new byte[1024];
+
                 DatagramPacket packet = new DatagramPacket(data, data.length);
                 socket.receive(packet);
 
-                String message = new String(data);
+                String message = new String(packet.getData(),0,packet.getLength(),StandardCharsets.UTF_8);
                 String resp = process(message);
                 System.out.println("UDP " + packet.getAddress() + ":" + packet.getPort() + " -> " + resp);
 
-                byte[] out = resp.getBytes();
+                byte[] out = resp.getBytes(StandardCharsets.UTF_8);
                 socket.send(new DatagramPacket(out, out.length, packet.getAddress(), packet.getPort()));
             }
         } catch (Exception e) {
@@ -64,6 +64,18 @@ public class UDPController {
                 }
                 String leader = item.getLeader() == null ? "-" : item.getLeader();
                 return "PRICE;" + item.getId() + ";" + item.getCurrentPrice() + ";" + leader;
+            case "TOP":
+                if (parts.length == 2) {
+                    return "ERROR;INVALID_FORMAT";
+                }
+                Item item1 = services.top();
+                if (item1==null) {
+                    return "TOP;"+ "-" +";"+ 0;
+                }else{
+                    return "TOP;" + item1.getId() + ";" + item1.getBids();
+                }
+
+
             default:
                 return "ERROR;INVALID_FORMAT";
         }

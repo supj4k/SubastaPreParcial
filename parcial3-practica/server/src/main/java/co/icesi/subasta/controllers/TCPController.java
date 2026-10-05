@@ -34,13 +34,13 @@ public class TCPController {
     private Gson gson;
 
     public TCPController(ServicesImpl services) {
-        this(services, 9090);
+        this(services, 8080);
     }
 
     public TCPController(ServicesImpl services, int port) {
         this.services = services;
         try {
-            serverSocket = new ServerSocket(port, 50, InetAddress.getByName("192.168.131.42"));
+            serverSocket = new ServerSocket(port, 50, InetAddress.getByName("0.0.0.0"));
             executor = Executors.newFixedThreadPool(5);
             gson = new GsonBuilder().create();
         } catch (Exception e) {
@@ -105,6 +105,8 @@ public class TCPController {
                                 user = data.get("user");
                                 response.status = "OK";
                                 response.data.put("user", user);
+                                writer.write(gson.toJson(response));
+                                writer.flush();
                             } catch (AuctionException e) {
                                 response.status = "ERROR";
                                 response.data.put("message", e.getMessage());
@@ -138,7 +140,7 @@ public class TCPController {
                             writer.flush();
                             clientSocket.close();
                             System.out.println("Client disconnected: " + clientSocket.getRemoteSocketAddress());
-                            return;
+                            break;
                         default:
                             break;
                     }
@@ -146,6 +148,10 @@ public class TCPController {
                     writer.write(gson.toJson(response));
                     writer.newLine();
                     writer.flush();
+                    writer.close();
+                    reader.close();
+
+                    clientSocket.close();
                 }
             } catch (Exception e) {
                 e.printStackTrace();
